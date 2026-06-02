@@ -4,7 +4,7 @@
 #   默认模式：仅同步，不删除本地文件
 #   清理模式：同步后停止跟踪并删除本地用户文件（保留仓库基础设施）
 
-REPO_DIR="$HOME/claude-sync-workspace"
+REPO_DIR="$HOME/工作"
 cd "$REPO_DIR" || exit 0
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then

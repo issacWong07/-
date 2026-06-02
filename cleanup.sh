@@ -2,7 +2,7 @@
 # 手动清理脚本：停止跟踪已上传文件并删除本地副本
 # 用法：bash cleanup.sh
 
-cd "$HOME/claude-sync-workspace" || exit 1
+cd "$HOME/工作" || exit 1
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "错误：不是 git 仓库"
