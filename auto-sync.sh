@@ -47,8 +47,8 @@ ARCHIVE_DIR="待归档"
 if [ -d "$ARCHIVE_DIR" ]; then
     echo "[auto-sync] 清理待归档目录..."
 
-    # 获取待归档目录下所有被跟踪的文件
-    ARCHIVE_FILES=$(git ls-files "$ARCHIVE_DIR/")
+    # 获取待归档目录下所有被跟踪的文件（禁用 quotepath 避免中文转义）
+    ARCHIVE_FILES=$(git -c core.quotepath=false ls-files "$ARCHIVE_DIR/")
 
     if [ -n "$ARCHIVE_FILES" ]; then
         while IFS= read -r file; do
