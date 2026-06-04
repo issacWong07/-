@@ -42,42 +42,37 @@ git commit -m "sync: $(date '+%Y-%m-%d %H:%M:%S')" --no-verify
 git push origin main
 echo "[auto-sync] 已推送到 GitHub"
 
-# ---------- 3. 清理模式：停止跟踪 + 删除本地文件 ----------
-if [ "$CLEANUP_MODE" = "1" ]; then
-    echo "[auto-sync] 清理模式：上传后删除本地文件..."
+# ---------- 3. 方案B：自动清理待归档目录 ----------
+ARCHIVE_DIR="待归档"
+if [ -d "$ARCHIVE_DIR" ]; then
+    echo "[auto-sync] 清理待归档目录..."
 
-    UPLOADED_FILES=""
-    echo "$STAGED_FILES" | while read -r file; do
-        [ -z "$file" ] && continue
-        is_critical "$file" && continue
+    # 获取待归档目录下所有被跟踪的文件
+    ARCHIVE_FILES=$(git ls-files "$ARCHIVE_DIR/")
 
-        if [ -f "$file" ]; then
-            # 停止 git 跟踪（保留历史版本在 GitHub）
-            git rm --cached "$file" > /dev/null 2>&1
-            # 删除本地文件
-            rm -f "$file"
-            UPLOADED_FILES="$UPLOADED_FILES$file\n"
-            echo "  ✓ 已清理: $file"
+    if [ -n "$ARCHIVE_FILES" ]; then
+        while IFS= read -r file; do
+            if [ -f "$file" ]; then
+                git rm --cached "$file" > /dev/null 2>&1
+                rm -f "$file"
+                echo "  ✓ 已清理: $file"
+
+                if ! grep -qxF "$file" .gitignore 2>/dev/null; then
+                    echo "$file" >> .gitignore
+                fi
+            fi
+        done <<< "$ARCHIVE_FILES"
+
+        # 提交删除和 .gitignore 更新
+        git add -A
+        if ! git diff --cached --quiet; then
+            git commit -m "chore: auto cleanup 待归档 files after sync" --no-verify
+            git push origin main
+            echo "[auto-sync] 待归档清理完成，GitHub 保留历史版本"
         fi
-    done
 
-    # 把清理的文件加入 .gitignore，防止下次同步时冲突
-    echo "$STAGED_FILES" | while read -r file; do
-        [ -z "$file" ] && continue
-        is_critical "$file" && continue
-        if ! grep -qxF "$file" .gitignore 2>/dev/null; then
-            echo "$file" >> .gitignore
-        fi
-    done
-
-    # 提交 .gitignore 更新（让 git 永久忽略这些文件路径）
-    git add .gitignore
-    if ! git diff --cached --quiet; then
-        git commit -m "chore: cleanup uploaded files and update .gitignore" --no-verify
-        git push origin main
-        echo "[auto-sync] 清理完成，GitHub 保留历史版本"
+        # 删除空目录
+        find "$ARCHIVE_DIR" -type d -empty -delete 2>/dev/null
+        rmdir "$ARCHIVE_DIR" 2>/dev/null
     fi
-
-    # 删除空目录
-    find . -type d -not -path './.git/*' -empty -delete 2>/dev/null
 fi

@@ -26,22 +26,24 @@ echo ""
 read -p "确认清理？(y/N) " confirm
 
 if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-    echo "$TRACKED_FILES" | while read -r file; do
+    # 使用 process substitution 避免子 shell 问题
+    while IFS= read -r file; do
         if [ -f "$file" ]; then
             git rm --cached "$file" > /dev/null 2>&1
             rm -f "$file"
             echo "  ✓ 已清理: $file"
         fi
-    done
+    done <<< "$TRACKED_FILES"
 
     # 更新 .gitignore
-    echo "$TRACKED_FILES" | while read -r file; do
+    while IFS= read -r file; do
         if ! grep -qxF "$file" .gitignore 2>/dev/null; then
             echo "$file" >> .gitignore
         fi
-    done
+    done <<< "$TRACKED_FILES"
 
-    git add .gitignore
+    # 暂存所有变更（包括 git rm --cached 产生的删除）
+    git add -A
     if ! git diff --cached --quiet; then
         git commit -m "chore: manual cleanup uploaded files" --no-verify
         git push origin main
