@@ -17,6 +17,7 @@
     }
 """
 
+import argparse
 import json
 import os
 import sys
@@ -73,14 +74,77 @@ def scan_archive_files(archive_dir: Path) -> list[Path]:
         # 跳过隐藏文件和目录
         if any(part.startswith(".") for part in item.relative_to(archive_dir).parts):
             continue
-        if item.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            log(f"跳过不支持的文件类型: {item}")
-            continue
         files.append(item)
 
     # 按路径排序，保证输出稳定
     files.sort()
     return files
+
+
+def cleanup_files(archive_dir: Path, details: list[dict], repo_dir: Path = None) -> list[str]:
+    """清理已成功索引、重复或不支持索引的文件，返回已清理文件列表
+
+    只清理状态为 indexed/duplicate/unsupported 的文件，error 状态文件保留供重试。
+    """
+    if repo_dir is None:
+        repo_dir = Path.home() / "工作"
+
+    gitignore_path = repo_dir / ".gitignore"
+    cleaned = []
+
+    for detail in details:
+        status = detail.get("status")
+        file_str = detail.get("file")
+        if not file_str:
+            continue
+        if status not in ("indexed", "duplicate", "unsupported"):
+            log(f"保留未成功文件: {file_str}")
+            continue
+
+        file_path = Path(file_str)
+        if not file_path.is_absolute():
+            file_path = repo_dir / file_path
+
+        if not file_path.exists():
+            continue
+
+        try:
+            file_path.unlink()
+            cleaned.append(str(file_path))
+            log(f"已清理本地文件: {file_path}")
+
+            # 计算相对于仓库根目录的路径，用于 .gitignore
+            try:
+                rel_path = file_path.relative_to(repo_dir)
+                rel_path_str = str(rel_path)
+                if gitignore_path.exists():
+                    existing = gitignore_path.read_text(encoding="utf-8").splitlines()
+                    if rel_path_str not in existing:
+                        with open(gitignore_path, "a", encoding="utf-8") as f:
+                            f.write(f"{rel_path_str}\n")
+                        log(f"已加入 .gitignore: {rel_path_str}")
+                else:
+                    gitignore_path.write_text(f"{rel_path_str}\n", encoding="utf-8")
+            except ValueError:
+                log(f"文件不在仓库内，跳过 .gitignore: {file_path}")
+        except Exception as e:
+            log(f"清理失败: {file_path} - {e}")
+
+    # 删除空目录
+    if archive_dir.exists():
+        for subdir in sorted(archive_dir.rglob("*"), reverse=True):
+            if subdir.is_dir() and not any(subdir.iterdir()):
+                try:
+                    subdir.rmdir()
+                    log(f"已删除空目录: {subdir}")
+                except Exception:
+                    pass
+        try:
+            archive_dir.rmdir()
+        except Exception:
+            pass
+
+    return cleaned
 
 
 def index_file(file_path: Path) -> dict:
@@ -92,15 +156,24 @@ def index_file(file_path: Path) -> dict:
 
 
 def main() -> int:
-    archive_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "工作" / "待归档"
+    parser = argparse.ArgumentParser(description="同步工作空间归档文件到 evolving-knowledge-mcp")
+    parser.add_argument("archive_dir", nargs="?", default=str(Path.home() / "工作" / "待归档"), help="待归档目录路径")
+    parser.add_argument("--cleanup", action="store_true", help="同步后清理已成功索引/重复/不支持的本地文件")
+    parser.add_argument("--repo-dir", default=str(Path.home() / "工作"), help="工作空间仓库根目录")
+    args = parser.parse_args()
+
+    archive_dir = Path(args.archive_dir)
+    repo_dir = Path(args.repo_dir)
 
     report = {
         "archive_dir": str(archive_dir),
         "scanned": 0,
         "indexed": 0,
         "duplicates": 0,
+        "unsupported": 0,
         "errors": 0,
         "details": [],
+        "cleaned": [],
     }
 
     try:
@@ -119,6 +192,15 @@ def main() -> int:
                 "status": "pending",
                 "result": None,
             }
+
+            # 检查文件类型
+            if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                detail["status"] = "unsupported"
+                detail["result"] = {"message": f"不支持的文件类型: {file_path.suffix}"}
+                report["unsupported"] += 1
+                log(f"跳过不支持的文件类型: {file_path}")
+                report["details"].append(detail)
+                continue
 
             try:
                 result = index_file(file_path)
@@ -143,6 +225,9 @@ def main() -> int:
                 log(f"索引异常: {file_path} - {e}")
 
             report["details"].append(detail)
+
+        if args.cleanup:
+            report["cleaned"] = cleanup_files(archive_dir, report["details"], repo_dir)
 
     except Exception as e:
         report["errors"] += 1
