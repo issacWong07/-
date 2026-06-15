@@ -5,15 +5,21 @@
 将 工作/待归档/ 目录下的文件索引到 evolving-knowledge-mcp 知识库。
 
 用法：
-    python3 sync-to-mcp.py [待归档目录路径]
+    python3 sync-to-mcp.py [待归档目录路径] [--cleanup]
+
+参数：
+    --cleanup       同步后清理已成功索引/重复/不支持的本地文件
+    --repo-dir      工作空间仓库根目录（默认 ~/工作）
 
 返回 JSON 到 stdout：
     {
         "scanned": 扫描文件数,
         "indexed": 成功索引数,
         "duplicates": 重复跳过数,
+        "unsupported": 不支持文件数,
         "errors": 错误数,
-        "details": [...]
+        "details": [...],
+        "cleaned": [已清理文件路径列表]
     }
 """
 
