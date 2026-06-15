@@ -15,7 +15,7 @@ fi
 CLEANUP_MODE="${CLEANUP:-0}"
 
 # 关键基础设施文件（永不删除）
-CRITICAL_FILES=(".gitignore" "auto-sync.sh" "README.md" "cleanup.sh")
+CRITICAL_FILES=(".gitignore" "auto-sync.sh" "README.md" "cleanup.sh" "sync-to-mcp.py")
 
 is_critical() {
     local target="$1"
@@ -29,20 +29,38 @@ is_critical() {
 
 # ---------- 1. 暂存所有变更 ----------
 git add -A
-if git diff --cached --quiet; then
-    echo "[auto-sync] 没有变更，跳过"
-    exit 0
+HAS_OTHER_CHANGES=0
+if ! git diff --cached --quiet; then
+    HAS_OTHER_CHANGES=1
+else
+    echo "[auto-sync] 没有非归档变更"
 fi
 
 # 获取被暂存的文件列表
 STAGED_FILES=$(git diff --cached --name-only)
 
-# ---------- 2. 提交并推送 ----------
-git commit -m "sync: $(date '+%Y-%m-%d %H:%M:%S')" --no-verify
-git push origin main
-echo "[auto-sync] 已推送到 GitHub"
+# ---------- 2. 提交并推送（如有非归档变更） ----------
+if [ "$HAS_OTHER_CHANGES" -eq 1 ]; then
+    git commit -m "sync: $(date '+%Y-%m-%d %H:%M:%S')" --no-verify
+    git push origin main
+    echo "[auto-sync] 已推送到 GitHub"
+fi
 
-# ---------- 3. 方案B：自动清理待归档目录 ----------
+# ---------- 3. 同步 待归档 文件到 evolving-knowledge-mcp ----------
+ARCHIVE_DIR="待归档"
+SYNC_SCRIPT="$REPO_DIR/sync-to-mcp.py"
+if [ -f "$SYNC_SCRIPT" ] && [ -d "$ARCHIVE_DIR" ]; then
+    echo "[auto-sync] 同步待归档文件到 evolving-knowledge-mcp..."
+    if python3 "$SYNC_SCRIPT" "$ARCHIVE_DIR"; then
+        echo "[auto-sync] MCP 索引完成"
+    else
+        echo "[auto-sync] ⚠️ MCP 索引失败，跳过待归档清理以保留文件重试"
+        # 不再继续清理待归档目录
+        exit 0
+    fi
+fi
+
+# ---------- 4. 方案B：自动清理待归档目录 ----------
 ARCHIVE_DIR="待归档"
 if [ -d "$ARCHIVE_DIR" ]; then
     echo "[auto-sync] 清理待归档目录..."

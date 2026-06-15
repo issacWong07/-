@@ -10,7 +10,7 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
 fi
 
 # 关键基础设施文件（永不删除）
-CRITICAL="^(\.gitignore|auto-sync\.sh|README\.md|cleanup\.sh)$"
+CRITICAL="^(\.gitignore|auto-sync\.sh|README\.md|cleanup\.sh|sync-to-mcp\.py)$"
 
 # 获取所有已跟踪的非关键文件
 TRACKED_FILES=$(git ls-files | grep -v -E "$CRITICAL")
