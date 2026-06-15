@@ -33,7 +33,7 @@ if [ "$HAS_ARCHIVE_FILES" -eq 0 ] && [ "$HAS_STAGED_CHANGES" -eq 0 ]; then
     exit 0
 fi
 
-# ---------- 3. 提交非归档/归档的主变更（暂不 push） ----------
+# ---------- 3. 提交主变更（暂不 push） ----------
 if [ "$HAS_STAGED_CHANGES" -eq 1 ]; then
     git commit -m "sync: $(date '+%Y-%m-%d %H:%M:%S')" --no-verify
     echo "[auto-sync] 已提交主变更"
