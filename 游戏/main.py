@@ -22,10 +22,15 @@ import threading
 import time
 from pathlib import Path
 
-import cv2
-import numpy as np
-import pyautogui
-from pynput import keyboard
+try:
+    import cv2
+    import numpy as np
+    import pyautogui
+    from pynput import keyboard
+except ImportError as e:
+    print(f"缺少依赖: {e}")
+    print("请先安装依赖: pip install -r requirements.txt")
+    sys.exit(1)
 
 # 禁用 PyAutoGUI 的安全功能（鼠标移动到角落不会触发 FailSafeException）
 pyautogui.FAILSAFE = True
